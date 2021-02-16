@@ -1,0 +1,325 @@
+#!/bin/bash
+
+# The purpose of this script is to grab online hosts file and then generate one
+# based on entries in a config file.
+
+# Let's create a configuration folder (and avoid creating one if one already exists)
+# and then enter it
+
+# Let's backup the original hosts file just in case
+echo "Prepare to enter password when using this utility!"
+echo "For usage commands, use '-h' or '--help'."
+
+# Check to see or create the configuration directory
+if [ -d ~/.config/hosts_switch ] ; then
+    cd ~/.config/hosts_switch
+
+else
+    mkdir ~/.config/hosts_switch
+    cd ~/.config/hosts_switch
+fi
+
+# Backup the hosts file if a certain file does not exist...
+if [ -f ~/.config/hosts_switch/nofirsttime ] ; then
+    echo
+else
+    echo "Backing up original hosts file"
+    sudo cp /etc/hosts /etc/hosts.backup.original
+    cp /etc/hosts ~/.hosts
+    touch ~/.config/hosts_switch/nofirsttime
+    echo "Downloading hosts lists..."
+    hosts_switch_generate -u
+fi
+
+while [ ! $# -eq 0 ]
+do
+    case "$1" in
+        --help | -h)
+            echo "USAGE: hosts_switch_generate [ options ... ]"
+            echo "where options include:"
+            echo ""
+            echo "-u or --update    Update hosts file lists"
+            echo ""
+            echo "-h or --basic     Use the default list provided by Adaway"
+            echo ""
+            echo "-m or --moderate  Use the 'Unified Hosts + Fakenews + Gambling' StevenBlack"
+            echo "                  hosts list"
+            echo ""
+            echo "-e or --extreme   Use the Unified Hosts + fakenews + gambling + porn + social"
+            echo "                  StevenBlack hosts list"
+            echo ""
+            echo "If you, for whatever reason deleted the configuration folder"
+            echo "while already having a generated hosts file, you may have overwritten your"
+            echo "original hosts file. Fortunately this utility keeps a hidden backup"
+            echo "in your home directory as '.hosts' upon the first run."
+            echo "Run this utility with '-R' or '--recover' to restore your stock hosts"
+            echo "in case something like this happens."
+            exit
+            ;;
+
+        --update | -u)
+            # Begin gathering adaway hosts list
+            echo "Downloading hosts files for Adaway..."
+
+            if [ -d adaway ] ; then
+                # Basically sees if the adaway directory exists
+                cd adaway
+                if [ -f hosts.txt ] ; then
+                    # Move old hosts.txt into hosts.txt.old
+                    rm hosts.txt
+                    wget https://adaway.org/hosts.txt
+                    cd ..
+                else
+                    # Go ahead and download the hosts files since
+                    # they don't exist.
+                    wget https://adaway.org/hosts.txt
+                fi
+            # If the directory does not exist, it will create it and then carry on with
+            # downloading the lists
+            else
+                # Do the same as above, but create and enter the adaway directory
+                mkdir adaway
+                cd adaway
+                wget https://adaway.org/hosts.txt
+                cd ..
+            fi
+
+            echo ""
+
+            echo "Downloading StevenBlack hosts files (moderate blocking)"
+            # The steps taken here are identical to the above but with a different list...
+            if [ -d moderate ] ; then
+                cd moderate
+                if [ -f hosts.txt ] ; then
+                    rm hosts.txt
+                    wget http://sbc.io/hosts/alternates/fakenews/hosts -O hosts.txt
+                    cd ..
+                else
+                    wget http://sbc.io/hosts/alternates/fakenews/hosts -O hosts.txt
+                    cd ..
+                fi
+
+            else
+                mkdir moderate
+                cd moderate
+                wget http://sbc.io/hosts/alternates/fakenews/hosts -O hosts.txt
+                cd ..
+            fi
+
+            echo ""
+
+            echo "Downloading StevenBlack hosts files (extreme blocking)"
+            # The steps taken here are identical to the above but with a different list...
+            if [ -d extreme ] ; then
+                cd extreme
+                if [ -f hosts.txt ] ; then
+                    rm hosts.txt
+                    wget http://sbc.io/hosts/alternates/fakenews-gambling-porn-social/hosts -O hosts.txt
+                    cd ..
+                else
+                    wget http://sbc.io/hosts/alternates/fakenews-gambling-porn-social/hosts -O hosts.txt
+                    cd ..
+                fi
+
+            else
+                mkdir extreme
+                cd extreme
+                wget http://sbc.io/hosts/alternates/fakenews-gambling-porn-social/hosts -O hosts.txt
+                cd ..
+            fi
+
+            exit
+
+            ;;
+
+        ###########################################################################
+        #BEGIN BASIC AD BLOCKING SECTION
+        ###########################################################################
+
+        --basic | -b)
+            echo "You chose basic ad blocking"
+
+            # Restore hosts file beforehand to make sure there are no excessive
+            # hosts file entries
+            if [ -f ~/.config/hosts_switch/adaway/hosts.txt ] ; then
+                # Restore hosts file beforehand to make sure there are no excessive
+                # hosts file entries
+                sudo cp /etc/hosts.backup.original /etc/hosts
+
+            else
+                # Exit program after showing the following message
+                echo "E: Please run 'hosts_switch_generate -u' to generate new lists"
+                exit
+
+            fi
+            # Check to see if the adaway folder exists
+            if [ -d ~/.config/hosts_switch/adaway ] ; then
+                cd adaway
+
+                # Begin generation
+                if [ -f hosts.txt ] ; then
+                    echo "Merging hosts file with chosen list"
+                    # Copy original hosts file to a file to modify
+                    cat /etc/hosts >> hosts.system
+                    # Adding an informative line to the hosts file
+                    echo "# Custom hosts file beyond this line:" >> hosts.system
+                    # Cut out the non-important bits from the hosts file grabbed
+                    # from the internet and create a new file
+                    sed -e '1,24d' < hosts.txt >> hosts.mod
+                    # Grab the afforementioned hosts file and merge it with the
+                    # (original) copied hosts file
+                    cat hosts.mod >> hosts.system
+                    # Clean up!
+                    rm hosts.mod
+                    # Rename the generated hosts file, then move it to the system's directory
+                    mv hosts.system hosts
+
+                    # Now to move hosts to /etc/hosts
+                    sudo mv hosts /etc/hosts
+
+                fi
+            else
+                echo "Please run 'hosts_switch_generate -u' to generate new lists"
+                exit
+            fi
+            # Ensuring that permissions / ownership are correct for the hosts file that was just
+            # created
+            sudo chown root /etc/hosts
+            sudo chgrp root /etc/hosts
+            exit
+
+            ;;
+
+        ###########################################################################
+        #BEGIN MEDIUM AD BLOCKING SECTION
+        ###########################################################################
+
+        --moderate | -m)
+            echo "You chose moderate ad blocking"
+
+            # Let's check to see if definitions exist on the computer...
+            if [ -f ~/.config/hosts_switch/moderate/hosts.txt ] ; then
+                # Restore hosts file beforehand to make sure there are no excessive
+                # hosts file entries
+                sudo cp /etc/hosts.backup.original /etc/hosts
+
+            else
+                # Exit program after showing the following message
+                echo "E: Please run 'hosts_switch_generate -u' to generate new lists"
+                exit
+
+            fi
+
+            # Check to see if the moderate folder exists
+            if [ -d ~/.config/hosts_switch/moderate ] ; then
+                # Dive into the directory
+                cd moderate
+
+                # Begin generation
+                if [ -f hosts.txt ] ; then
+                    echo "Merging hosts file with chosen list"
+                    # Copy original hosts file to a file to modify
+                    cat /etc/hosts >> hosts.system
+                    # Cut out the non-important bits from the hosts file grabbed
+                    # from the internet and create a new file
+                    sed -e '16,37d' < hosts.txt >> hosts.mod
+                    # Grab the afforementioned hosts file and merge it with the
+                    # (original) copied hosts file
+                    cat hosts.mod >> hosts.system
+                    # Clean up!
+                    rm hosts.mod
+                    # Rename the generated hosts file, then move it to the system's directory
+                    mv hosts.system hosts
+
+                    # Now to move hosts to /etc/hosts
+                    sudo cp hosts /etc/hosts
+
+                fi
+            else
+                echo "Please run 'hosts_switch_generate -u' to generate new lists"
+                exit
+            fi
+            # Ensuring that permissions / ownership are correct for the hosts file that was just
+            # created
+            sudo chown root /etc/hosts
+            sudo chgrp root /etc/hosts
+            exit
+
+            ;;
+
+        ###########################################################################
+        #BEGIN EXTREME AD BLOCKING SECTION
+        ###########################################################################
+
+        --extreme | -e)
+            echo "You chose extreme ad blocking. Be aware that this blocks social media."
+
+            # Let's check to see if definitions exist on the computer...
+            if [ -f ~/.config/hosts_switch/extreme/hosts.txt ] ; then
+                # Restore hosts file beforehand to make sure there are no excessive
+                # hosts file entries
+                sudo cp /etc/hosts.backup.original /etc/hosts
+
+            else
+                # Exit program after showing the following message
+                echo "E: Please run 'hosts_switch_generate -u' to generate new lists."
+                exit
+
+            fi
+
+            # Check to see if the moderate folder exists
+            if [ -d ~/.config/hosts_switch/extreme ] ; then
+                # Dive into the directory
+                cd extreme
+
+                # Begin generation
+                if [ -f hosts.txt ] ; then
+                    echo "Merging hosts file with chosen list"
+                    # Copy original hosts file to a file to modify
+                    cat /etc/hosts >> hosts.system
+                    # Adding an informative line to the hosts file
+                    echo "# Custom hosts file beyond this line:" >> hosts.system
+                    # Cut out the non-important bits from the hosts file grabbed
+                    # from the internet and create a new file
+                    sed -e '1,37d' < hosts.txt >> hosts.mod
+                    # Grab the afforementioned hosts file and merge it with the
+                    # (original) copied hosts file
+                    cat hosts.mod >> hosts.system
+                    # Clean up!
+                    rm hosts.mod
+                    # Rename the generated hosts file, then move it to the system's directory
+                    mv hosts.system hosts
+
+                    # Now to move hosts to /etc/hosts
+                    sudo cp hosts /etc/hosts
+
+                fi
+            else
+                echo "Please run 'hosts_switch_generate -u' to generate new lists."
+                exit
+            fi
+            # Ensuring that permissions / ownership are correct for the hosts file that was just
+            # created
+            sudo chown root /etc/hosts
+            sudo chgrp root /etc/hosts
+            exit
+
+            ;;
+
+        --restore | -r)
+            echo "Restoring hosts file"
+            sudo cp /etc/hosts.backup.original /etc/hosts
+            exit
+            ;;
+            
+        --recover | -R)
+            echo "Failsafe procedure executed. Please use caution next time when deleting"
+            echo "your configuration..."
+            sudo cp ~/.hosts /etc/hosts
+            sudo chgrp root /etc/hosts
+            sudo chown root /etc/hosts
+            exit
+            ;;
+    esac
+done
+
