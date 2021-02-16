@@ -11,6 +11,9 @@ are finished downloading.
 This does modify the hosts file on a Linux system and creates two backups for redundancy. This redundancy
 also protects against errors in code, as well as user error. A transcript of the '--help' option is available below.
 
+INSTALLATION: copy the script to any path defined in $PATH. If in a system path (i.e. /usr/local/bin, /usr/bin, etc.) then
+ensure that permissions are set through 'chmod 755 /path/to/script'.
+
 USAGE: hosts_switch_generate [ options ... ]
 where options include:
 
